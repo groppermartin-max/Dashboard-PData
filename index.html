@@ -1,21 +1,576 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PuntoLab — Defense Economy Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@300;400;500&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PuntoLab — Defense Economy Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.8.0/Recharts.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:    #1F3864;
+    --navy-l:  #2a4a7f;
+    --gold:    #FFD700;
+    --gold-d:  #c9aa00;
+    --bg:      #0d1b2e;
+    --surface: #152438;
+    --surface2:#1c2e45;
+    --border:  #2a3f5c;
+    --text:    #e8edf5;
+    --text-dim:#8aa0ba;
+    --green:   #4ade80;
+    --red:     #f87171;
+
+    --innov:  #60a5fa;
+    --prod:   #f59e0b;
+    --serv:   #34d399;
+    --log:    #c084fc;
+  }
+
+  html, body, #root { height: 100%; background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; font-weight: 300; }
+
+  /* ── LAYOUT ── */
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  .header {
+    background: var(--navy);
+    border-bottom: 2px solid var(--gold);
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 20px;
+  }
+  .header h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; font-size: 1.5rem; letter-spacing: .08em;
+    color: #fff; text-transform: uppercase;
+  }
+  .header h1 span { color: var(--gold); }
+  .header-tag {
+    background: var(--gold); color: var(--navy);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: .65rem; font-weight: 700; letter-spacing: .12em;
+    padding: 3px 8px; text-transform: uppercase;
+  }
+
+  .tabs {
+    display: flex; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 13px 28px; cursor: pointer; font-size: .85rem; font-weight: 500;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text-dim); border-bottom: 3px solid transparent;
+    transition: all .2s;
+  }
+  .tab:hover { color: var(--text); background: var(--surface2); }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); background: var(--surface2); }
+
+  .main { flex: 1; display: flex; flex-direction: column; padding: 24px 32px; gap: 20px; }
+
+  /* ── CONTROLS ── */
+  .controls {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 14px 20px;
+  }
+  .ctrl-label {
+    font-family: 'Barlow Condensed', sans-serif; font-size: .72rem;
+    font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim);
+  }
+  select {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: 'Barlow', sans-serif; font-size: .85rem;
+    padding: 6px 10px; cursor: pointer; outline: none;
+    transition: border-color .2s;
+  }
+  select:hover, select:focus { border-color: var(--gold); }
+
+  .toggle-group { display: flex; gap: 1px; }
+  .toggle-btn {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-dim); font-family: 'Barlow Condensed', sans-serif;
+    font-size: .75rem; font-weight: 600; letter-spacing: .1em;
+    padding: 6px 14px; cursor: pointer; text-transform: uppercase;
+    transition: all .15s;
+  }
+  .toggle-btn.active { background: var(--gold); color: var(--navy); border-color: var(--gold); }
+  .toggle-btn:hover:not(.active) { border-color: var(--gold); color: var(--text); }
+
+  /* ── SCATTER ── */
+  .scatter-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 20px; flex: 1;
+  }
+  .scatter-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;
+    font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 16px;
+  }
+  .scatter-title strong { color: var(--text); }
+
+  .tooltip-box {
+    background: var(--navy); border: 1px solid var(--gold);
+    padding: 10px 14px; font-size: .8rem; min-width: 200px;
+  }
+  .tooltip-box .t-msa { font-weight: 600; margin-bottom: 6px; font-size: .85rem; }
+  .tooltip-box .t-row { display: flex; justify-content: space-between; gap: 16px; color: var(--text-dim); }
+  .tooltip-box .t-row span:last-child { color: var(--text); font-weight: 500; }
+
+  .dim-legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
+  .dim-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dim-item { font-size: .78rem; color: var(--text-dim); display: flex; align-items: center; }
+
+  /* ── MAP PLACEHOLDER ── */
+  .map-notice {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 40px 32px; display: flex; flex-direction: column; gap: 16px;
+    align-items: flex-start;
+  }
+  .map-notice h3 {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 1.2rem;
+    font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--gold);
+  }
+  .map-notice p { font-size: .9rem; color: var(--text-dim); line-height: 1.65; max-width: 640px; }
+  .map-notice code {
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 1px 6px; font-size: .82rem; color: var(--gold);
+  }
+
+  .zip-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;
+    margin-top: 8px;
+  }
+  .zip-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 12px 14px;
+  }
+  .zip-code { font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem; font-weight: 700; color: var(--gold); }
+  .zip-dominant { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin: 4px 0 8px; }
+  .zip-bars { display: flex; flex-direction: column; gap: 4px; }
+  .zip-bar-row { display: flex; align-items: center; gap: 6px; font-size: .72rem; }
+  .zip-bar-label { width: 80px; color: var(--text-dim); truncate: ellipsis; white-space: nowrap; overflow: hidden; }
+  .zip-bar-track { flex: 1; height: 5px; background: var(--border); }
+  .zip-bar-fill { height: 100%; transition: width .3s; }
+  .zip-bar-val { width: 38px; text-align: right; color: var(--text); }
+
+  /* ── INFO ── */
+  .info-bar {
+    display: flex; gap: 24px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 12px 20px;
+  }
+  .info-stat { display: flex; flex-direction: column; gap: 2px; }
+  .info-stat .val { font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; font-weight: 700; color: var(--gold); }
+  .info-stat .lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); }
+
+  .note { font-size: .72rem; color: var(--text-dim); padding: 0 2px; }
+
+  /* loading */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 300px; font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+
+// ══════════════════════════════════════════════════
+// DATOS: Intentar cargar desde JSON; si no, usar datos mock
+// ══════════════════════════════════════════════════
+
+const DATA_PATH = "./data/";
+
+const ACT_COLORS = {
+  Innovation: "var(--innov)",
+  Production:  "var(--prod)",
+  Services:    "var(--serv)",
+  Logistics:   "var(--log)",
+};
+
+const DIM_OPTIONS = [
+  { value: "innovation", label: "Innovation",  color: "var(--innov)" },
+  { value: "production",  label: "Production",  color: "var(--prod)"  },
+  { value: "services",    label: "Services",    color: "var(--serv)"  },
+  { value: "logistics",   label: "Logistics",   color: "var(--log)"   },
+];
+
+const SCORE_FIELD  = d => `${d}_score`;
+const RANK_FIELD   = d => `${d}_rank`;
+const ASSETS_FIELD = d => `${d}_assets`;
+const AMT_FIELD    = d => `${d}_amt`;
+
+// ── MOCK DATA (visible cuando no hay JSON cargado) ──────────
+function generateMock() {
+  const cities = [
+    "San Diego, CA","Los Angeles, CA","New York, NY","Boston, MA",
+    "Philadelphia, PA","Washington, DC","Seattle, WA","Houston, TX",
+    "Dallas, TX","Chicago, IL","Atlanta, GA","Denver, CO",
+    "Phoenix, AZ","San Jose, CA","Orlando, FL","Baltimore, MD",
+    "Tampa, FL","Detroit, MI","Minneapolis, MN","St. Louis, MO",
+    "Norfolk, VA","Huntsville, AL","San Antonio, TX","Sacramento, CA",
+    "Raleigh, NC","Jacksonville, FL","Louisville, KY","Indianapolis, IN",
+    "Columbus, OH","Kansas City, MO","Hartford, CT","Providence, RI",
+    "Nashville, TN","New Haven, CT","Bridgeport, CT","Albuquerque, NM",
+    "Oklahoma City, OK","Richmond, VA","Riverside, CA","Las Vegas, NV",
+    "Portland, OR","Memphis, TN","Buffalo, NY","Pittsburgh, PA",
+    "Cincinnati, OH","Cleveland, OH","Salt Lake City, UT","Milwaukee, WI",
+    "Rochester, NY","Albany, NY"
+  ];
+  return cities.map((msa, i) => ({
+    msa,
+    top50: true,
+    innovation_score: Math.random() * 80 + 10,
+    production_score: Math.random() * 80 + 10,
+    services_score:   Math.random() * 80 + 10,
+    logistics_score:  Math.random() * 80 + 10,
+    innovation_rank: i + 1,
+    production_rank: Math.floor(Math.random() * 50) + 1,
+    services_rank:   Math.floor(Math.random() * 50) + 1,
+    logistics_rank:  Math.floor(Math.random() * 50) + 1,
+    innovation_assets: Math.floor(Math.random() * 200 + 10),
+    production_assets: Math.floor(Math.random() * 150 + 5),
+    innovation_amt: Math.random() * 5000 + 200,
+    production_amt: Math.random() * 8000 + 100,
+    amt_total_m: Math.random() * 20000 + 500,
+  }));
+}
+
+const MOCK_MAP = (() => {
+  const zips = ["19101","19102","19103","19104","19106","19107","19111","19114","19115","19116",
+                 "19118","19119","19120","19121","19122","19123","19124","19125","19126","19128",
+                 "19130","19131","19132","19133","19134","19135","19136","19137","19138","19139",
+                 "19140","19141","19143","19144","19145","19146","19147","19148","19149","19150",
+                 "08101","08102","08103","08104","08105","19703","19702","19801","19802","17101"];
+  const acts = ["Innovation","Production","Services","Logistics"];
+  return zips.map(zip => {
+    const shares = acts.map(() => Math.random());
+    const total  = shares.reduce((a,b) => a+b, 0);
+    const norm   = shares.map(s => s/total);
+    const dom    = acts[norm.indexOf(Math.max(...norm))];
+    return {
+      zip_code: zip,
+      total_assets: Math.floor(Math.random() * 20 + 1),
+      total_amt_m:  parseFloat((Math.random() * 500).toFixed(2)),
+      dominant_activity: dom,
+      share_innovation: parseFloat(norm[0].toFixed(4)),
+      share_production:  parseFloat(norm[1].toFixed(4)),
+      share_services:    parseFloat(norm[2].toFixed(4)),
+      share_logistics:   parseFloat(norm[3].toFixed(4)),
+      orgs: "Sample Org A | Sample Org B | Sample Org C"
+    };
+  });
+})();
+
+// ══════════════════════════════════════════════════
+// CUSTOM TOOLTIP — SCATTER
+// ══════════════════════════════════════════════════
+function ScatterTooltip({ active, payload, xDim, yDim }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  if (!d) return null;
+  const xLabel = DIM_OPTIONS.find(o => o.value === xDim)?.label;
+  const yLabel = DIM_OPTIONS.find(o => o.value === yDim)?.label;
+  return (
+    <div className="tooltip-box">
+      <div className="t-msa">{d.msa}</div>
+      <div className="t-row"><span>{xLabel} Score</span><span>{d[SCORE_FIELD(xDim)]?.toFixed(1)}</span></div>
+      <div className="t-row"><span>{xLabel} Rank</span><span>#{d[RANK_FIELD(xDim)]}</span></div>
+      <div className="t-row"><span>{yLabel} Score</span><span>{d[SCORE_FIELD(yDim)]?.toFixed(1)}</span></div>
+      <div className="t-row"><span>{yLabel} Rank</span><span>#{d[RANK_FIELD(yDim)]}</span></div>
+      <div className="t-row"><span>Total USD (M)</span><span>${d.amt_total_m?.toFixed(0)}</span></div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════
+// MÓDULO A — SCATTER PLOT
+// ══════════════════════════════════════════════════
+function ScatterModule({ data }) {
+  const [xDim, setXDim] = React.useState("innovation");
+  const [yDim, setYDim] = React.useState("production");
+  const [filter, setFilter] = React.useState("top50");
+
+  const filtered = React.useMemo(() => {
+    let d = data.filter(m =>
+      m[SCORE_FIELD(xDim)] != null && m[SCORE_FIELD(yDim)] != null
+    );
+    if (filter === "top50") d = d.filter(m => m.top50);
+    return d;
+  }, [data, xDim, yDim, filter]);
+
+  const xLabel = DIM_OPTIONS.find(o => o.value === xDim)?.label || xDim;
+  const yLabel = DIM_OPTIONS.find(o => o.value === yDim)?.label || yDim;
+  const xColor = DIM_OPTIONS.find(o => o.value === xDim)?.color || "#fff";
+  const yColor = DIM_OPTIONS.find(o => o.value === yDim)?.color || "#fff";
+
+  const { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Label } = Recharts;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Controls */}
+      <div className="controls">
+        <span className="ctrl-label">X Axis</span>
+        <select value={xDim} onChange={e => setXDim(e.target.value)}>
+          {DIM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <span className="ctrl-label" style={{ marginLeft: 8 }}>Y Axis</span>
+        <select value={yDim} onChange={e => setYDim(e.target.value)}>
+          {DIM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="ctrl-label">Filter</span>
+          <div className="toggle-group">
+            <button className={`toggle-btn ${filter === "top50" ? "active" : ""}`} onClick={() => setFilter("top50")}>Top 50</button>
+            <button className={`toggle-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>All MSAs</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Info bar */}
+      <div className="info-bar">
+        <div className="info-stat">
+          <span className="val">{filtered.length}</span>
+          <span className="lbl">MSAs shown</span>
+        </div>
+        <div className="info-stat">
+          <span className="val" style={{ color: xColor }}>{xLabel}</span>
+          <span className="lbl">X Axis</span>
+        </div>
+        <div className="info-stat">
+          <span className="val" style={{ color: yColor }}>{yLabel}</span>
+          <span className="lbl">Y Axis</span>
+        </div>
+        <div style={{ marginLeft: "auto", alignSelf: "center" }}>
+          <span className="note">Score = avg(rank assets, rank USD). Lower score = higher rank.</span>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="scatter-wrap">
+        <div className="scatter-title">
+          <strong>{xLabel}</strong> vs <strong>{yLabel}</strong> — Defense Economy Index
+        </div>
+        <ResponsiveContainer width="100%" height={440}>
+          <ScatterChart margin={{ top: 10, right: 30, bottom: 40, left: 30 }}>
+            <CartesianGrid stroke="#2a3f5c" strokeDasharray="3 3" />
+            <XAxis
+              type="number" dataKey={SCORE_FIELD(xDim)}
+              name={xLabel}
+              tick={{ fill: "#8aa0ba", fontSize: 11 }}
+              reversed
+            >
+              <Label value={`${xLabel} Score (lower = better)`} position="insideBottom" offset={-20}
+                fill="#8aa0ba" fontSize={11} />
+            </XAxis>
+            <YAxis
+              type="number" dataKey={SCORE_FIELD(yDim)}
+              name={yLabel}
+              tick={{ fill: "#8aa0ba", fontSize: 11 }}
+              reversed
+            >
+              <Label value={`${yLabel} Score`} angle={-90} position="insideLeft" offset={10}
+                fill="#8aa0ba" fontSize={11} />
+            </YAxis>
+            <Tooltip content={<ScatterTooltip xDim={xDim} yDim={yDim} />} />
+            <Scatter
+              data={filtered}
+              fill={xColor}
+              fillOpacity={0.75}
+              r={5}
+            />
+          </ScatterChart>
+        </ResponsiveContainer>
+        <div className="dim-legend">
+          {DIM_OPTIONS.map(o => (
+            <div key={o.value} className="dim-item">
+              <span className="dim-dot" style={{ background: o.color }} />
+              {o.label}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════
+// MÓDULO B — MAPA PHILLY (vista tabular + barras)
+// ══════════════════════════════════════════════════
+const SHARE_COLS = [
+  { key: "share_innovation", label: "Innovation", color: "var(--innov)" },
+  { key: "share_production",  label: "Production",  color: "var(--prod)"  },
+  { key: "share_services",    label: "Services",    color: "var(--serv)"  },
+  { key: "share_logistics",   label: "Logistics",   color: "var(--log)"   },
+];
+
+function ZipCard({ z }) {
+  const dom = z.dominant_activity;
+  const domColor = ACT_COLORS[dom] || "var(--text-dim)";
+  return (
+    <div className="zip-card">
+      <div className="zip-code">{z.zip_code}</div>
+      <div className="zip-dominant" style={{ color: domColor }}>▶ {dom}</div>
+      <div className="zip-bars">
+        {SHARE_COLS.map(s => {
+          const val = z[s.key] || 0;
+          return (
+            <div key={s.key} className="zip-bar-row">
+              <div className="zip-bar-label">{s.label}</div>
+              <div className="zip-bar-track">
+                <div className="zip-bar-fill" style={{ width: `${(val*100).toFixed(0)}%`, background: s.color }} />
+              </div>
+              <div className="zip-bar-val">{(val*100).toFixed(0)}%</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 8, fontSize: ".68rem", color: "var(--text-dim)" }}>
+        {z.total_assets} assets · ${z.total_amt_m?.toFixed(1)}M
+      </div>
+    </div>
+  );
+}
+
+function MapModule({ data }) {
+  const [sortBy, setSortBy] = React.useState("total_amt_m");
+  const [filterAct, setFilterAct] = React.useState("all");
+
+  const displayed = React.useMemo(() => {
+    let d = [...data];
+    if (filterAct !== "all") d = d.filter(z => z.dominant_activity === filterAct);
+    d.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
+    return d.slice(0, 60);
+  }, [data, sortBy, filterAct]);
+
+  const actDist = React.useMemo(() => {
+    const counts = {};
+    data.forEach(z => { counts[z.dominant_activity] = (counts[z.dominant_activity] || 0) + 1; });
+    return counts;
+  }, [data]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      <div className="map-notice">
+        <h3>Philadelphia MSA — ZIP Code Activity Map</h3>
+        <p>
+          Each card represents a ZIP code. Bars show the activity composition (share of USD allocations).
+          The dominant activity is highlighted. Run <code>02_export_map.R</code> to generate <code>map_philly.json</code>
+          with real data. Currently showing <strong>{data.length === MOCK_MAP.length ? "mock" : "real"} data</strong>.
+        </p>
+        <p style={{ marginTop: 4 }}>
+          For an interactive choropleth map, integrate a Mapbox/Leaflet layer using the <code>lat_center</code> /
+          <code>lon_center</code> fields exported in <code>map_philly.json</code>. That step requires a map tile API key.
+        </p>
+      </div>
+
+      <div className="controls">
+        <span className="ctrl-label">Dominant Activity</span>
+        <div className="toggle-group">
+          <button className={`toggle-btn ${filterAct === "all" ? "active" : ""}`} onClick={() => setFilterAct("all")}>All</button>
+          {["Innovation","Production","Services","Logistics"].map(a => (
+            <button key={a}
+              className={`toggle-btn ${filterAct === a ? "active" : ""}`}
+              style={filterAct === a ? {} : { borderColor: ACT_COLORS[a], color: ACT_COLORS[a] }}
+              onClick={() => setFilterAct(a)}>
+              {a} {actDist[a] ? `(${actDist[a]})` : ""}
+            </button>
+          ))}
+        </div>
+        <span className="ctrl-label" style={{ marginLeft: "auto" }}>Sort by</span>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <option value="total_amt_m">USD Allocations</option>
+          <option value="total_assets">Number of Assets</option>
+          <option value="share_innovation">Innovation Share</option>
+          <option value="share_production">Production Share</option>
+          <option value="share_services">Services Share</option>
+          <option value="share_logistics">Logistics Share</option>
+        </select>
+      </div>
+
+      <div className="info-bar">
+        <div className="info-stat">
+          <span className="val">{displayed.length}</span>
+          <span className="lbl">ZIP Codes shown</span>
+        </div>
+        {Object.entries(actDist).map(([act, n]) => (
+          <div key={act} className="info-stat">
+            <span className="val" style={{ color: ACT_COLORS[act] || "var(--gold)" }}>{n}</span>
+            <span className="lbl">Dominant: {act}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="zip-grid">
+        {displayed.map(z => <ZipCard key={z.zip_code} z={z} />)}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════
+// APP ROOT
+// ══════════════════════════════════════════════════
+function App() {
+  const [tab, setTab] = React.useState("scatter");
+  const [scatterData, setScatterData] = React.useState(null);
+  const [mapData, setMapData]         = React.useState(null);
+  const [usingMock, setUsingMock]     = React.useState(false);
+
+  React.useEffect(() => {
+    // Intentar cargar scatter_index.json; fallback a mock
+    fetch(`${DATA_PATH}scatter_index.json`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => setScatterData(d))
+      .catch(() => { setScatterData(generateMock()); setUsingMock(true); });
+
+    // Intentar cargar map_philly.json; fallback a mock
+    fetch(`${DATA_PATH}map_philly.json`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => setMapData(d))
+      .catch(() => { setMapData(MOCK_MAP); });
+  }, []);
+
+  if (!scatterData || !mapData) {
+    return <div className="loading">Loading data…</div>;
+  }
+
+  return (
+    <div className="app">
+      <div className="header">
+        <h1>PuntoLab <span>Defense Economy</span> Dashboard</h1>
+        <span className="header-tag">Bases 25.3</span>
+        {usingMock && <span className="header-tag" style={{ background: "var(--surface2)", color: "var(--gold)", border: "1px solid var(--gold)" }}>Mock Data</span>}
+      </div>
+
+      <div className="tabs">
+        <div className={`tab ${tab === "scatter" ? "active" : ""}`} onClick={() => setTab("scatter")}>
+          Innovation–Production Index
+        </div>
+        <div className={`tab ${tab === "map" ? "active" : ""}`} onClick={() => setTab("map")}>
+          ZIP Activity Map · Philadelphia
+        </div>
+      </div>
+
+      <div className="main">
+        {tab === "scatter" && <ScatterModule data={scatterData} />}
+        {tab === "map"     && <MapModule     data={mapData}     />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
 </html>
