@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.8.0/Recharts.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet" />
 <style>
@@ -170,6 +172,38 @@
   .info-stat .lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); }
 
   .note { font-size: .72rem; color: var(--text-dim); padding: 0 2px; }
+
+  /* ── LEAFLET MAP ── */
+  .philly-map { height: 560px; border: 1px solid var(--border); background: var(--bg); }
+
+  /* Tooltip */
+  .leaflet-tooltip.zip-tt {
+    background: #1F3864; border: 1px solid #FFD700;
+    border-radius: 0; color: #e8edf5;
+    font-family: 'Barlow', sans-serif; font-size: .8rem;
+    padding: 0; box-shadow: none; pointer-events: none;
+  }
+  .leaflet-tooltip.zip-tt::before { display: none; }
+  .zt-inner { padding: 10px 14px; min-width: 200px; }
+  .zt-zip   { font-family: 'Barlow Condensed', sans-serif; font-size: 1rem; font-weight: 700; color: #FFD700; margin-bottom: 2px; }
+  .zt-dom   { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .zt-meta  { font-size: .72rem; color: #8aa0ba; margin-bottom: 8px; }
+  .zt-row   { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: .72rem; }
+  .zt-lbl   { width: 72px; color: #8aa0ba; white-space: nowrap; }
+  .zt-track { flex: 1; height: 5px; background: #2a3f5c; }
+  .zt-fill  { height: 100%; }
+  .zt-val   { width: 32px; text-align: right; color: #e8edf5; }
+
+  /* Legend */
+  .map-legend {
+    background: #152438; border: 1px solid #2a3f5c;
+    padding: 10px 14px; font-family: 'Barlow', sans-serif; font-size: .78rem; color: #e8edf5;
+  }
+  .ml-title { font-family: 'Barlow Condensed', sans-serif; font-size: .7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .1em; color: #8aa0ba; margin-bottom: 8px; }
+  .ml-item  { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .ml-dot   { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(255,255,255,.3); }
+  .ml-note  { font-size: .68rem; color: #8aa0ba; margin-top: 8px; }
 
   /* loading */
   .loading {
@@ -405,53 +439,50 @@ function ScatterModule({ data }) {
 }
 
 // ══════════════════════════════════════════════════
-// MÓDULO B — MAPA PHILLY (vista tabular + barras)
+// MÓDULO B — MAPA PHILLY (Leaflet bubble map)
 // ══════════════════════════════════════════════════
+const ACT_HEX = {
+  Innovation: "#60a5fa",
+  Production:  "#f59e0b",
+  Services:    "#34d399",
+  Logistics:   "#c084fc",
+};
+
 const SHARE_COLS = [
-  { key: "share_innovation", label: "Innovation", color: "var(--innov)" },
-  { key: "share_production",  label: "Production",  color: "var(--prod)"  },
-  { key: "share_services",    label: "Services",    color: "var(--serv)"  },
-  { key: "share_logistics",   label: "Logistics",   color: "var(--log)"   },
+  { key: "share_innovation", label: "Innovation", color: "#60a5fa" },
+  { key: "share_production",  label: "Production",  color: "#f59e0b" },
+  { key: "share_services",    label: "Services",    color: "#34d399" },
+  { key: "share_logistics",   label: "Logistics",   color: "#c084fc" },
 ];
 
-function ZipCard({ z }) {
-  const dom = z.dominant_activity;
-  const domColor = ACT_COLORS[dom] || "var(--text-dim)";
-  return (
-    <div className="zip-card">
-      <div className="zip-code">{z.zip_code}</div>
-      <div className="zip-dominant" style={{ color: domColor }}>▶ {dom}</div>
-      <div className="zip-bars">
-        {SHARE_COLS.map(s => {
-          const val = z[s.key] || 0;
-          return (
-            <div key={s.key} className="zip-bar-row">
-              <div className="zip-bar-label">{s.label}</div>
-              <div className="zip-bar-track">
-                <div className="zip-bar-fill" style={{ width: `${(val*100).toFixed(0)}%`, background: s.color }} />
-              </div>
-              <div className="zip-bar-val">{(val*100).toFixed(0)}%</div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ marginTop: 8, fontSize: ".68rem", color: "var(--text-dim)" }}>
-        {z.total_assets} assets · ${z.total_amt_m?.toFixed(1)}M
-      </div>
-    </div>
-  );
+function buildTooltipHtml(z) {
+  const color = ACT_HEX[z.dominant_activity] || "#8aa0ba";
+  const bars = SHARE_COLS.map(s => {
+    const pct = ((z[s.key] || 0) * 100).toFixed(0);
+    return `<div class="zt-row">
+      <span class="zt-lbl">${s.label}</span>
+      <div class="zt-track"><div class="zt-fill" style="width:${pct}%;background:${s.color}"></div></div>
+      <span class="zt-val">${pct}%</span>
+    </div>`;
+  }).join("");
+  return `<div class="zt-inner">
+    <div class="zt-zip">${z.zip_code}</div>
+    <div class="zt-dom" style="color:${color}">▶ ${z.dominant_activity}</div>
+    <div class="zt-meta">${z.total_assets} assets · $${(z.total_amt_m || 0).toFixed(1)}M</div>
+    ${bars}
+  </div>`;
 }
 
 function MapModule({ data }) {
-  const [sortBy, setSortBy] = React.useState("total_amt_m");
   const [filterAct, setFilterAct] = React.useState("all");
+  const mapDivRef  = React.useRef(null);
+  const leafletRef = React.useRef(null);
+  const circlesRef = React.useRef([]);
 
-  const displayed = React.useMemo(() => {
-    let d = [...data];
-    if (filterAct !== "all") d = d.filter(z => z.dominant_activity === filterAct);
-    d.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
-    return d.slice(0, 60);
-  }, [data, sortBy, filterAct]);
+  const maxAmt = React.useMemo(
+    () => Math.max(...data.map(z => z.total_amt_m || 0), 1),
+    [data]
+  );
 
   const actDist = React.useMemo(() => {
     const counts = {};
@@ -459,21 +490,70 @@ function MapModule({ data }) {
     return counts;
   }, [data]);
 
+  // Init Leaflet once on mount
+  React.useEffect(() => {
+    if (!mapDivRef.current || leafletRef.current) return;
+
+    const map = L.map(mapDivRef.current, { center: [39.95, -75.16], zoom: 11 });
+
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const circles = [];
+    data.forEach(z => {
+      if (!z.lat_center || !z.lon_center) return;
+      const color  = ACT_HEX[z.dominant_activity] || "#8aa0ba";
+      const radius = 6 + ((z.total_amt_m || 0) / maxAmt) * 34;
+
+      const circle = L.circleMarker([z.lat_center, z.lon_center], {
+        radius,
+        fillColor: color,
+        color: "#ffffff",
+        weight: 1,
+        opacity: 0.8,
+        fillOpacity: 0.75,
+      });
+
+      circle.bindTooltip(buildTooltipHtml(z), {
+        sticky: true, className: "zip-tt", opacity: 1,
+      });
+
+      circle.addTo(map);
+      circles.push({ dom: z.dominant_activity, circle });
+    });
+
+    circlesRef.current = circles;
+    leafletRef.current = map;
+
+    // Legend
+    const legend = L.control({ position: "bottomright" });
+    legend.onAdd = () => {
+      const div = L.DomUtil.create("div", "map-legend");
+      div.innerHTML =
+        '<div class="ml-title">Dominant Activity</div>' +
+        Object.entries(ACT_HEX).map(([act, hex]) =>
+          `<div class="ml-item"><span class="ml-dot" style="background:${hex}"></span>${act}</div>`
+        ).join("") +
+        '<div class="ml-note">Circle size ∝ USD (M)</div>';
+      return div;
+    };
+    legend.addTo(map);
+
+    return () => { map.remove(); leafletRef.current = null; circlesRef.current = []; };
+  }, [data, maxAmt]);
+
+  // Update opacity whenever filter changes
+  React.useEffect(() => {
+    circlesRef.current.forEach(({ dom, circle }) => {
+      const active = filterAct === "all" || dom === filterAct;
+      circle.setStyle({ fillOpacity: active ? 0.75 : 0.08, opacity: active ? 0.8 : 0.15 });
+    });
+  }, [filterAct]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-      <div className="map-notice">
-        <h3>Philadelphia MSA — ZIP Code Activity Map</h3>
-        <p>
-          Each card represents a ZIP code. Bars show the activity composition (share of USD allocations).
-          The dominant activity is highlighted. Run <code>02_export_map.R</code> to generate <code>map_philly.json</code>
-          with real data. Currently showing <strong>{data.length === MOCK_MAP.length ? "mock" : "real"} data</strong>.
-        </p>
-        <p style={{ marginTop: 4 }}>
-          For an interactive choropleth map, integrate a Mapbox/Leaflet layer using the <code>lat_center</code> /
-          <code>lon_center</code> fields exported in <code>map_philly.json</code>. That step requires a map tile API key.
-        </p>
-      </div>
 
       <div className="controls">
         <span className="ctrl-label">Dominant Activity</span>
@@ -482,39 +562,28 @@ function MapModule({ data }) {
           {["Innovation","Production","Services","Logistics"].map(a => (
             <button key={a}
               className={`toggle-btn ${filterAct === a ? "active" : ""}`}
-              style={filterAct === a ? {} : { borderColor: ACT_COLORS[a], color: ACT_COLORS[a] }}
+              style={filterAct === a ? {} : { borderColor: ACT_HEX[a], color: ACT_HEX[a] }}
               onClick={() => setFilterAct(a)}>
               {a} {actDist[a] ? `(${actDist[a]})` : ""}
             </button>
           ))}
         </div>
-        <span className="ctrl-label" style={{ marginLeft: "auto" }}>Sort by</span>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
-          <option value="total_amt_m">USD Allocations</option>
-          <option value="total_assets">Number of Assets</option>
-          <option value="share_innovation">Innovation Share</option>
-          <option value="share_production">Production Share</option>
-          <option value="share_services">Services Share</option>
-          <option value="share_logistics">Logistics Share</option>
-        </select>
       </div>
 
       <div className="info-bar">
         <div className="info-stat">
-          <span className="val">{displayed.length}</span>
-          <span className="lbl">ZIP Codes shown</span>
+          <span className="val">{data.length}</span>
+          <span className="lbl">ZIP Codes</span>
         </div>
         {Object.entries(actDist).map(([act, n]) => (
           <div key={act} className="info-stat">
-            <span className="val" style={{ color: ACT_COLORS[act] || "var(--gold)" }}>{n}</span>
-            <span className="lbl">Dominant: {act}</span>
+            <span className="val" style={{ color: ACT_HEX[act] || "var(--gold)" }}>{n}</span>
+            <span className="lbl">▶ {act}</span>
           </div>
         ))}
       </div>
 
-      <div className="zip-grid">
-        {displayed.map(z => <ZipCard key={z.zip_code} z={z} />)}
-      </div>
+      <div ref={mapDivRef} className="philly-map"></div>
     </div>
   );
 }
