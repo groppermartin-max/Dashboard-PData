@@ -199,11 +199,26 @@
     background: #152438; border: 1px solid #2a3f5c;
     padding: 10px 14px; font-family: 'Barlow', sans-serif; font-size: .78rem; color: #e8edf5;
   }
-  .ml-title { font-family: 'Barlow Condensed', sans-serif; font-size: .7rem; font-weight: 700;
+  .ml-title  { font-family: 'Barlow Condensed', sans-serif; font-size: .7rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: .1em; color: #8aa0ba; margin-bottom: 8px; }
-  .ml-item  { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-  .ml-dot   { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(255,255,255,.3); }
-  .ml-note  { font-size: .68rem; color: #8aa0ba; margin-top: 8px; }
+  .ml-item   { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .ml-swatch { width: 14px; height: 10px; display: inline-block; flex-shrink: 0; border: 1px solid rgba(255,255,255,.25); }
+  .ml-note   { font-size: .68rem; color: #8aa0ba; margin-top: 8px; }
+
+  /* Rank labels (top 10) */
+  .rank-label { background: transparent !important; border: none !important; }
+  .rank-label span {
+    display: inline-block;
+    background: rgba(13,27,46,0.88); border: 1px solid #FFD700;
+    color: #FFD700; font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; font-size: .7rem; letter-spacing: .06em;
+    padding: 1px 5px; white-space: nowrap;
+  }
+
+  /* Tooltip orgs list */
+  .zt-orgs { margin-top: 7px; border-top: 1px solid #2a3f5c; padding-top: 6px; }
+  .zt-org  { font-size: .68rem; color: #8aa0ba; margin-bottom: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
 
   /* loading */
   .loading {
@@ -455,34 +470,35 @@ const SHARE_COLS = [
   { key: "share_logistics",   label: "Logistics",   color: "#c084fc" },
 ];
 
-function buildTooltipHtml(z) {
-  const color = ACT_HEX[z.dominant_activity] || "#8aa0ba";
+function buildTooltipHtml(p) {
+  const color = ACT_HEX[p.dominant_activity] || "#8aa0ba";
   const bars = SHARE_COLS.map(s => {
-    const pct = ((z[s.key] || 0) * 100).toFixed(0);
+    const pct = ((p[s.key] || 0) * 100).toFixed(0);
     return `<div class="zt-row">
       <span class="zt-lbl">${s.label}</span>
       <div class="zt-track"><div class="zt-fill" style="width:${pct}%;background:${s.color}"></div></div>
       <span class="zt-val">${pct}%</span>
     </div>`;
   }).join("");
+  const orgHtml = p.orgs
+    ? p.orgs.split("|").map(o => o.trim()).filter(Boolean).slice(0, 4)
+        .map(o => `<div class="zt-org">${o}</div>`).join("")
+    : "";
   return `<div class="zt-inner">
-    <div class="zt-zip">${z.zip_code}</div>
-    <div class="zt-dom" style="color:${color}">▶ ${z.dominant_activity}</div>
-    <div class="zt-meta">${z.total_assets} assets · $${(z.total_amt_m || 0).toFixed(1)}M</div>
+    <div class="zt-zip">${p.zip_code}</div>
+    <div class="zt-dom" style="color:${color}">▶ ${p.dominant_activity || "No Data"}</div>
+    <div class="zt-meta">${p.total_assets || 0} assets · $${(p.total_amt_m || 0).toFixed(1)}M</div>
     ${bars}
+    ${orgHtml ? `<div class="zt-orgs">${orgHtml}</div>` : ""}
   </div>`;
 }
 
 function MapModule({ data }) {
   const [filterAct, setFilterAct] = React.useState("all");
-  const mapDivRef  = React.useRef(null);
-  const leafletRef = React.useRef(null);
-  const circlesRef = React.useRef([]);
-
-  const maxAmt = React.useMemo(
-    () => Math.max(...data.map(z => z.total_amt_m || 0), 1),
-    [data]
-  );
+  const mapDivRef    = React.useRef(null);
+  const leafletRef   = React.useRef(null);
+  const layersRef    = React.useRef([]);   // [{ dom, layer, baseStyle }]
+  const filterActRef = React.useRef("all");
 
   const actDist = React.useMemo(() => {
     const counts = {};
@@ -490,65 +506,129 @@ function MapModule({ data }) {
     return counts;
   }, [data]);
 
-  // Init Leaflet once on mount
+  // Keep ref in sync so Leaflet event handlers always read current filter
+  React.useEffect(() => { filterActRef.current = filterAct; }, [filterAct]);
+
+  // Init map + load GeoJSON once
   React.useEffect(() => {
     if (!mapDivRef.current || leafletRef.current) return;
 
     const map = L.map(mapDivRef.current, { center: [39.95, -75.16], zoom: 11 });
-
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
       maxZoom: 19,
     }).addTo(map);
-
-    const circles = [];
-    data.forEach(z => {
-      if (!z.lat_center || !z.lon_center) return;
-      const color  = ACT_HEX[z.dominant_activity] || "#8aa0ba";
-      const radius = 6 + ((z.total_amt_m || 0) / maxAmt) * 34;
-
-      const circle = L.circleMarker([z.lat_center, z.lon_center], {
-        radius,
-        fillColor: color,
-        color: "#ffffff",
-        weight: 1,
-        opacity: 0.8,
-        fillOpacity: 0.75,
-      });
-
-      circle.bindTooltip(buildTooltipHtml(z), {
-        sticky: true, className: "zip-tt", opacity: 1,
-      });
-
-      circle.addTo(map);
-      circles.push({ dom: z.dominant_activity, circle });
-    });
-
-    circlesRef.current = circles;
     leafletRef.current = map;
 
-    // Legend
-    const legend = L.control({ position: "bottomright" });
-    legend.onAdd = () => {
-      const div = L.DomUtil.create("div", "map-legend");
-      div.innerHTML =
-        '<div class="ml-title">Dominant Activity</div>' +
-        Object.entries(ACT_HEX).map(([act, hex]) =>
-          `<div class="ml-item"><span class="ml-dot" style="background:${hex}"></span>${act}</div>`
-        ).join("") +
-        '<div class="ml-note">Circle size ∝ USD (M)</div>';
-      return div;
+    fetch("./data/geo_philly.json")
+      .then(r => r.json())
+      .then(geo => {
+        const features = geo.features;
+        const maxAmt = Math.max(...features.map(f => f.properties.total_amt_m || 0), 1);
+
+        function calcFillOpacity(p) {
+          if (!p.total_amt_m) return 0.1;
+          return 0.15 + (p.total_amt_m / maxAmt) * 0.70;
+        }
+
+        // Build rank map for top 10 by USD
+        const rankMap = {};
+        [...features]
+          .filter(f => f.properties.total_amt_m)
+          .sort((a, b) => b.properties.total_amt_m - a.properties.total_amt_m)
+          .slice(0, 10)
+          .forEach((f, i) => { rankMap[f.properties.zip_code] = i + 1; });
+
+        const layers = [];
+
+        L.geoJSON(geo, {
+          style: feature => {
+            const p = feature.properties;
+            return {
+              fillColor:   ACT_HEX[p.dominant_activity] || "#2a3f5c",
+              fillOpacity: calcFillOpacity(p),
+              color:       "#ffffff",
+              weight:      0.5,
+              opacity:     0.4,
+            };
+          },
+          onEachFeature: (feature, layer) => {
+            const p  = feature.properties;
+            const bo = calcFillOpacity(p);
+
+            layer.bindTooltip(buildTooltipHtml(p), {
+              sticky: true, className: "zip-tt", opacity: 1,
+            });
+
+            layer.on("mouseover", () => {
+              layer.setStyle({ weight: 2, opacity: 1, fillOpacity: Math.min(bo + 0.2, 1) });
+              layer.bringToFront();
+            });
+
+            layer.on("mouseout", () => {
+              const active = filterActRef.current === "all" || p.dominant_activity === filterActRef.current;
+              layer.setStyle({
+                weight:      0.5,
+                opacity:     active ? 0.4  : 0.15,
+                fillOpacity: active ? bo   : 0.05,
+              });
+            });
+
+            layers.push({ dom: p.dominant_activity, layer, bo });
+          },
+        }).addTo(map);
+
+        layersRef.current = layers;
+
+        // Top-10 rank labels at ZIP centroids
+        features.forEach(f => {
+          const p    = f.properties;
+          const rank = rankMap[p.zip_code];
+          if (!rank || !p.lat_center || !p.lon_center) return;
+          L.marker([p.lat_center, p.lon_center], {
+            icon: L.divIcon({
+              className:  "rank-label",
+              html:       `<span>#${rank}</span>`,
+              iconSize:   [30, 18],
+              iconAnchor: [15, 9],
+            }),
+            interactive: false,
+            zIndexOffset: 1000,
+          }).addTo(map);
+        });
+
+        // Legend
+        const legend = L.control({ position: "bottomright" });
+        legend.onAdd = () => {
+          const div = L.DomUtil.create("div", "map-legend");
+          div.innerHTML =
+            '<div class="ml-title">Dominant Activity</div>' +
+            Object.entries(ACT_HEX).map(([act, hex]) =>
+              `<div class="ml-item"><span class="ml-swatch" style="background:${hex}"></span>${act}</div>`
+            ).join("") +
+            '<div class="ml-item"><span class="ml-swatch" style="background:#2a3f5c"></span>No Data</div>' +
+            '<div class="ml-note">Fill opacity ∝ USD (M)</div>';
+          return div;
+        };
+        legend.addTo(map);
+      });
+
+    return () => {
+      map.remove();
+      leafletRef.current = null;
+      layersRef.current  = [];
     };
-    legend.addTo(map);
+  }, []);
 
-    return () => { map.remove(); leafletRef.current = null; circlesRef.current = []; };
-  }, [data, maxAmt]);
-
-  // Update opacity whenever filter changes
+  // Dim/restore polygons when filter changes
   React.useEffect(() => {
-    circlesRef.current.forEach(({ dom, circle }) => {
+    layersRef.current.forEach(({ dom, layer, bo }) => {
       const active = filterAct === "all" || dom === filterAct;
-      circle.setStyle({ fillOpacity: active ? 0.75 : 0.08, opacity: active ? 0.8 : 0.15 });
+      layer.setStyle({
+        fillOpacity: active ? bo   : 0.05,
+        opacity:     active ? 0.4  : 0.15,
+        weight:      0.5,
+      });
     });
   }, [filterAct]);
 
