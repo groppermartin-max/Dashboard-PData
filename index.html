@@ -466,14 +466,13 @@ const ACT_HEX = {
   "No Data":             "#2a3f5c",
 };
 
-// Normalize legacy activity names that may appear in older data files
-const ACT_ALIAS = {
+const ACT_NORMALIZE = {
   "Logistics & Sustainment":    "Logistics",
   "Logistics &amp; Sustainment":"Logistics",
   "Workforce training":         "Workforce Training",
   "Innovation Intermediation":  "Innovation",
 };
-function normAct(v) { return ACT_ALIAS[v] || v || "No Data"; }
+function normalizeActivity(act) { return ACT_NORMALIZE[act] || act || "No Data"; }
 
 const SHARE_COLS = [
   { key: "share_innovation",         label: "Innovation",         color: "#60a5fa" },
@@ -558,7 +557,7 @@ function MapModule({ data }) {
         L.geoJSON(geo, {
           style: feature => {
             const p   = feature.properties;
-            const act = normAct(p.dominant_activity);
+            const act = normalizeActivity(p.dominant_activity);
             return {
               fillColor:   ACT_HEX[act] || ACT_HEX["No Data"],
               fillOpacity: calcFillOpacity(p),
@@ -569,7 +568,7 @@ function MapModule({ data }) {
           },
           onEachFeature: (feature, layer) => {
             const p   = feature.properties;
-            const act = normAct(p.dominant_activity);
+            const act = normalizeActivity(p.dominant_activity);
             const bo  = calcFillOpacity(p);
             // Pass normalized props to tooltip
             layer.bindTooltip(buildTooltipHtml({ ...p, dominant_activity: act }), {
