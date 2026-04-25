@@ -457,17 +457,21 @@ function ScatterModule({ data }) {
 // MÓDULO B — MAPA PHILLY (Leaflet bubble map)
 // ══════════════════════════════════════════════════
 const ACT_HEX = {
-  Innovation: "#60a5fa",
-  Production:  "#f59e0b",
-  Services:    "#34d399",
-  Logistics:   "#c084fc",
+  Innovation:          "#60a5fa",
+  Production:          "#f59e0b",
+  Services:            "#34d399",
+  Logistics:           "#c084fc",
+  Construction:        "#fb923c",
+  "Workforce Training":"#f472b6",
 };
 
 const SHARE_COLS = [
-  { key: "share_innovation", label: "Innovation", color: "#60a5fa" },
-  { key: "share_production",  label: "Production",  color: "#f59e0b" },
-  { key: "share_services",    label: "Services",    color: "#34d399" },
-  { key: "share_logistics",   label: "Logistics",   color: "#c084fc" },
+  { key: "share_innovation",         label: "Innovation",         color: "#60a5fa" },
+  { key: "share_production",         label: "Production",         color: "#f59e0b" },
+  { key: "share_services",           label: "Services",           color: "#34d399" },
+  { key: "share_logistics",          label: "Logistics",          color: "#c084fc" },
+  { key: "share_construction",       label: "Construction",       color: "#fb923c" },
+  { key: "share_workforce_training", label: "Workforce Training", color: "#f472b6" },
 ];
 
 function buildTooltipHtml(p) {
@@ -639,7 +643,7 @@ function MapModule({ data }) {
         <span className="ctrl-label">Dominant Activity</span>
         <div className="toggle-group">
           <button className={`toggle-btn ${filterAct === "all" ? "active" : ""}`} onClick={() => setFilterAct("all")}>All</button>
-          {["Innovation","Production","Services","Logistics"].map(a => (
+          {["Innovation","Production","Services","Logistics","Construction","Workforce Training"].map(a => (
             <button key={a}
               className={`toggle-btn ${filterAct === a ? "active" : ""}`}
               style={filterAct === a ? {} : { borderColor: ACT_HEX[a], color: ACT_HEX[a] }}
