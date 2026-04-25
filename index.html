@@ -515,7 +515,10 @@ function MapModule({ data }) {
 
   const actDist = React.useMemo(() => {
     const counts = {};
-    data.forEach(z => { counts[z.dominant_activity] = (counts[z.dominant_activity] || 0) + 1; });
+    data.forEach(z => {
+      const act = normalizeActivity(z.dominant_activity);
+      counts[act] = (counts[act] || 0) + 1;
+    });
     return counts;
   }, [data]);
 
